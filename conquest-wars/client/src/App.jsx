@@ -145,13 +145,34 @@ const ConquestWars = () => {
     updatePlayerStats(updated);
     
     addLog(`Battle: ${from.name} → ${to.name} | Attacker 🎲: [${attackerDice}] Defender 🎲: [${defenderDice}]`);
+    
+    // Check for victory after conquest
+    checkVictory(updated);
   };
 
   const addLog = (message) => {
     setBattleLog(prev => [message, ...prev].slice(0, 5));
   };
 
+  const checkVictory = (terrStates) => {
+    const activePlayers = players.filter(p => p.active);
+    for (let i = 0; i < activePlayers.length; i++) {
+      const playerTerritories = terrStates.filter(t => t.owner === i).length;
+      if (playerTerritories === territories.length) {
+        setGameState('victory');
+        addLog(`🎉 ${activePlayers[i].name} has conquered the world!`);
+        return true;
+      }
+    }
+    return false;
+  };
+
   const endTurn = () => {
+    // Check for victory before ending turn
+    if (checkVictory(territoryStates)) {
+      return;
+    }
+
     const activePlayers = players.filter(p => p.active);
     const nextPlayer = (currentPlayer + 1) % activePlayers.length;
     setCurrentPlayer(nextPlayer);
@@ -173,6 +194,51 @@ const ConquestWars = () => {
 
   const activePlayers = players.filter(p => p.active);
   const currentPlayerObj = activePlayers[currentPlayer];
+  const winner = activePlayers.find((p, idx) => territoryStates.filter(t => t.owner === idx).length === territories.length);
+
+  // Victory Screen
+  if (gameState === 'victory' && winner) {
+    return (
+      <div className="w-full h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white flex items-center justify-center">
+        <div className="text-center space-y-8 p-12 bg-slate-800/80 rounded-3xl border-4 border-yellow-400 shadow-2xl">
+          <Crown className="w-32 h-32 text-yellow-400 mx-auto animate-bounce" />
+          <div>
+            <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+              Victory!
+            </h1>
+            <div className="flex items-center justify-center gap-4 mb-6">
+              <div 
+                className="w-16 h-16 rounded-full border-4 border-white shadow-lg"
+                style={{ backgroundColor: winner.color }}
+              />
+              <p className="text-4xl font-bold">{winner.name}</p>
+            </div>
+            <p className="text-2xl text-gray-300 mb-8">
+              has conquered all territories!
+            </p>
+          </div>
+          
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={() => window.location.reload()}
+              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-all transform hover:scale-105"
+            >
+              Play Again
+            </button>
+            <a
+              href="https://github.com/MAGICMANIAC/conquest-wars"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="bg-gradient-to-r from-slate-700 to-slate-600 hover:from-slate-600 hover:to-slate-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-all transform hover:scale-105 flex items-center gap-2"
+            >
+              <Github className="w-5 h-5" />
+              View on GitHub
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-4">
