@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install Dojo
+        run: |
+          curl -L https://install.dojoengine.org | bash
+          dojoup
+      
+      - name: Build contracts
+        working-directory: ./contracts
+        run: sozo build
+      
+      - name: Run tests
+        working-directory: ./contracts
+        run: sozo test
+
+  test-client:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install and build
+        working-directory: ./client
+        run: |
+          npm ci
+          npm run build

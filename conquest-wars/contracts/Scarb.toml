@@ -1,0 +1,9 @@
+[package]
+name = "conquest_wars"
+version = "0.1.0"
+edition = "2023_11"
+
+[dependencies]
+dojo = { git = "https://github.com/dojoengine/dojo", tag = "v0.7.0" }
+
+[[target.dojo]]

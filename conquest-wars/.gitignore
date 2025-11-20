@@ -1,0 +1,21 @@
+# Cairo / Dojo
+target/
+Scarb.lock
+
+# Node
+node_modules/
+dist/
+*.log
+
+# Environment
+.env
+.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Testing
+coverage/
