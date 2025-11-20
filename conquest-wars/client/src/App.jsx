@@ -1,238 +1,258 @@
-import React, { useState, useEffect } from 'react';
-import { Swords, Shield, Users, Crown, Map, Zap, Trophy, Github, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Swords, Shield, Users, Crown, Map, Zap, Trophy, Github, ExternalLink, ArrowRight, Skull } from 'lucide-react';
 
-const ConquestWars = () => {
-  const [gameState, setGameState] = useState('setup');
-  const [players, setPlayers] = useState([
-    { id: 1, name: 'Red Empire', color: '#ef4444', armies: 30, territories: 0, active: true },
-    { id: 2, name: 'Blue Kingdom', color: '#3b82f6', armies: 30, territories: 0, active: true },
-    { id: 3, name: 'Green Alliance', color: '#22c55e', armies: 30, territories: 0, active: false },
-    { id: 4, name: 'Yellow Dynasty', color: '#eab308', armies: 30, territories: 0, active: false }
+interface Player {
+  id: number;
+  name: string;
+  color: string;
+  active: boolean;
+  eliminated?: boolean;
+}
+
+interface Territory {
+  id: number;
+  name: string;
+  x: number;
+  y: number;
+  neighbors: number[];
+}
+
+interface TerritoryState extends Territory {
+  armies: number;
+  owner: number | null; // index in activePlayers
+}
+
+const initialTerritories: Territory[] = [
+  { id: 1, name: 'North Wasteland', x: 150, y: 50, neighbors: [2, 4, 5] },
+  { id: 2, name: 'Eastern Peaks', x: 350, y: 80, neighbors: [1, 3, 6] },
+  { id: 3, name: 'Dragon Isles', x: 500, y: 120, neighbors: [2, 7] },
+  { id: 4, name: 'Central Plains', x: 100, y: 180, neighbors: [1, 5, 8, 9] },
+  { id: 5, name: 'Capital City', x: 250, y: 160, neighbors: [1, 4, 6, 9, 10] },
+  { id: 6, name: 'Mountain Pass', x: 400, y: 180, neighbors: [2, 5, 7, 10, 11] },
+  { id: 7, name: 'Coastal Fortress', x: 550, y: 200, neighbors: [3, 6, 12] },
+  { id: 8, name: 'Western Woods', x: 80, y: 320, neighbors: [4, 9, 13] },
+  { id: 9, name: 'Valley Kingdom', x: 200, y: 300, neighbors: [4, 5, 8, 10, 14] },
+  { id: 10, name: 'Trade Hub', x: 320, y: 290, neighbors: [5, 6, 9, 11, 14, 15] },
+  { id: 11, name: 'Desert Outpost', x: 450, y: 310, neighbors: [6, 7, 10, 12, 15] },
+  { id: 12, name: 'Port City', x: 580, y: 330, neighbors: [7, 11, 16] },
+  { id: 13, name: 'Dark Forest', x: 120, y: 420, neighbors: [8, 14] },
+  { id: 14, name: 'Ancient Ruins', x: 250, y: 410, neighbors: [9, 10, 13, 15] },
+  { id: 15, name: 'Volcano Base', x: 380, y: 420, neighbors: [10, 11, 14, 16] },
+  { id: 16, name: 'Southern Isles', x: 520, y: 440, neighbors: [12, 15] },
+];
+
+export default function ConquestWars() {
+  const [gameState, setGameState] = useState<'setup' | 'playing' | 'victory'>('setup');
+  const [phase, setPhase] = useState<'deploy' | 'attack' | 'fortify'>('deploy');
+  const [players, setPlayers] = useState<Player[]>([
+    { id: 1, name: 'Red Empire', color: '#ef4444', active: true },
+    { id: 2, name: 'Blue Kingdom', color: '#3b82f6', active: true },
+    { id: 3, name: 'Green Alliance', color: '#22c55e', active: false },
+    { id: 4, name: 'Yellow Dynasty', color: '#eab308', active: false },
   ]);
-  const [currentPlayer, setCurrentPlayer] = useState(0);
-  const [selectedTerritory, setSelectedTerritory] = useState(null);
-  const [attackFrom, setAttackFrom] = useState(null);
-  const [phase, setPhase] = useState('deploy');
-  const [reinforcements, setReinforcements] = useState(5);
-  const [battleLog, setBattleLog] = useState([]);
 
-  const territories = [
-    { id: 1, name: 'North Wasteland', x: 150, y: 50, armies: 0, owner: null, neighbors: [2, 4, 5] },
-    { id: 2, name: 'Eastern Peaks', x: 350, y: 80, armies: 0, owner: null, neighbors: [1, 3, 6] },
-    { id: 3, name: 'Dragon Isles', x: 500, y: 120, armies: 0, owner: null, neighbors: [2, 7] },
-    { id: 4, name: 'Central Plains', x: 100, y: 180, armies: 0, owner: null, neighbors: [1, 5, 8, 9] },
-    { id: 5, name: 'Capital City', x: 250, y: 160, armies: 0, owner: null, neighbors: [1, 4, 6, 9, 10] },
-    { id: 6, name: 'Mountain Pass', x: 400, y: 180, armies: 0, owner: null, neighbors: [2, 5, 7, 10, 11] },
-    { id: 7, name: 'Coastal Fortress', x: 550, y: 200, armies: 0, owner: null, neighbors: [3, 6, 12] },
-    { id: 8, name: 'Western Woods', x: 80, y: 320, armies: 0, owner: null, neighbors: [4, 9, 13] },
-    { id: 9, name: 'Valley Kingdom', x: 200, y: 300, armies: 0, owner: null, neighbors: [4, 5, 8, 10, 14] },
-    { id: 10, name: 'Trade Hub', x: 320, y: 290, armies: 0, owner: null, neighbors: [5, 6, 9, 11, 14, 15] },
-    { id: 11, name: 'Desert Outpost', x: 450, y: 310, armies: 0, owner: null, neighbors: [6, 7, 10, 12, 15] },
-    { id: 12, name: 'Port City', x: 580, y: 330, armies: 0, owner: null, neighbors: [7, 11, 16] },
-    { id: 13, name: 'Dark Forest', x: 120, y: 420, armies: 0, owner: null, neighbors: [8, 14] },
-    { id: 14, name: 'Ancient Ruins', x: 250, y: 410, armies: 0, owner: null, neighbors: [9, 10, 13, 15] },
-    { id: 15, name: 'Volcano Base', x: 380, y: 420, armies: 0, owner: null, neighbors: [10, 11, 14, 16] },
-    { id: 16, name: 'Southern Isles', x: 520, y: 440, armies: 0, owner: null, neighbors: [12, 15] }
-  ];
+  const activePlayers = useMemo(() => players.filter(p => p.active && !p.eliminated), [players]);
+  const [currentPlayerIdx, setCurrentPlayerIdx] = useState(0);
+  const currentPlayer = activePlayers[currentPlayerIdx];
 
-  const [territoryStates, setTerritoryStates] = useState(territories);
+  const [territoryStates, setTerritoryStates] = useState<TerritoryState[]>(
+    initialTerritories.map(t => ({ ...t, armies: 0, owner: null }))
+  );
 
+  const [selectedFrom, setSelectedFrom] = useState<TerritoryState | null>(null);
+  const [selectedTo, setSelectedTo] = useState<TerritoryState | null>(null);
+  const [reinforcements, setReinforcements] = useState(0);
+  const [battleLog, setBattleLog] = useState<string[]>([]);
+  const [diceAnimation, setDiceAnimation] = useState<{ attacker: number[]; defender: number[] } | null>(null);
+
+  // Initial setup
   useEffect(() => {
-    if (gameState === 'setup') {
-      const initialSetup = territories.map((t, idx) => ({
-        ...t,
-        owner: idx % players.filter(p => p.active).length,
-        armies: 3
-      }));
-      setTerritoryStates(initialSetup);
-      updatePlayerStats(initialSetup);
-      setGameState('playing');
-    }
-  }, []);
+    if (gameState !== 'setup') return;
 
-  const updatePlayerStats = (terrStates) => {
-    const activePlayers = players.filter(p => p.active);
-    const updatedPlayers = activePlayers.map(p => ({
-      ...p,
-      territories: terrStates.filter(t => t.owner === p.id - 1).length
-    }));
-    setPlayers(prev => prev.map(p => {
-      const updated = updatedPlayers.find(up => up.id === p.id);
-      return updated || p;
-    }));
-  };
+    const activeCount = activePlayers.length;
+    const armiesPerPlayer = activeCount === 2 ? 40 : activeCount === 3 ? 35 : 30;
 
-  const handleTerritoryClick = (territory) => {
-    const activePlayers = players.filter(p => p.active);
-    const currentPlayerObj = activePlayers[currentPlayer];
+    let territoryIndex = 0;
+    const setupTerritories = initialTerritories.map(t => {
+      const ownerIdx = territoryIndex % activeCount;
+      territoryIndex++;
+      return { ...t, owner: ownerIdx, armies: 3 };
+    });
 
-    if (phase === 'deploy') {
-      if (territory.owner === currentPlayer && reinforcements > 0) {
-        const updated = territoryStates.map(t =>
-          t.id === territory.id ? { ...t, armies: t.armies + 1 } : t
-        );
-        setTerritoryStates(updated);
-        setReinforcements(reinforcements - 1);
-        
-        if (reinforcements === 1) {
-          setPhase('attack');
-          addLog(`${currentPlayerObj.name} finished deploying reinforcements`);
-        }
-      }
-    } else if (phase === 'attack') {
-      if (!attackFrom) {
-        if (territory.owner === currentPlayer && territory.armies > 1) {
-          setAttackFrom(territory);
-          setSelectedTerritory(territory);
-        }
-      } else {
-        if (territory.owner !== currentPlayer && territory.neighbors.includes(attackFrom.id)) {
-          performAttack(attackFrom, territory);
-          setAttackFrom(null);
-          setSelectedTerritory(null);
-        } else if (territory.id === attackFrom.id) {
-          setAttackFrom(null);
-          setSelectedTerritory(null);
-        }
+    // Distribute remaining armies randomly
+    const remaining = activeCount * (armiesPerPlayer - 3 * (16 / activeCount));
+    let extraTerritories = [...setupTerritories];
+    for (let i = 0; i < remaining; i++) {
+      const randTerr = extraTerritories[Math.floor(Math.random() * 16)];
+      if (randTerr.owner !== null) {
+        randTerr.armies++;
       }
     }
+
+    setTerritoryStates(extraTerritories);
+    calculateReinforcements(extraTerritories, 0);
+    setGameState('playing');
+    addLog('Game started! Initial territories claimed.');
+  }, [gameState, activePlayers.length]);
+
+  const playerTerritories = useMemo(() => {
+    return territoryStates.reduce((acc, t) => {
+      if (t.owner !== null) acc[t.owner] = (acc[t.owner] || 0) + 1;
+      return acc;
+    }, [] as number[]);
+  }, [territoryStates]);
+
+  const calculateReinforcements = (territories: TerritoryState[], playerIdx: number) => {
+    const territoriesOwned = territories.filter(t => t.owner === playerIdx).length;
+    const base = Math.max(3, Math.floor(territoriesOwned / 3));
+    // Future: continent bonuses here
+    setReinforcements(base);
   };
 
-  const rollDice = (count) => {
+  const addLog = (msg: string) => {
+    setBattleLog(prev => [msg, ...prev].slice(0, 8));
+  };
+
+  const rollDice = (count: number): number[] => {
     return Array.from({ length: count }, () => Math.floor(Math.random() * 6) + 1).sort((a, b) => b - a);
   };
 
-  const performAttack = (from, to) => {
-    const activePlayers = players.filter(p => p.active);
-    const attackerDice = rollDice(Math.min(3, from.armies - 1));
-    const defenderDice = rollDice(Math.min(2, to.armies));
+  const performAttack = (from: TerritoryState, to: TerritoryState) => {
+    const attackerDiceCount = Math.min(3, from.armies - 1);
+    const defenderDiceCount = Math.min(2, to.armies);
+
+    const attackerRolls = rollDice(attackerDiceCount);
+    const defenderRolls = rollDice(defenderDiceCount);
+
+    setDiceAnimation({ attacker: attackerRolls, defender: defenderRolls });
 
     let attackerLosses = 0;
     let defenderLosses = 0;
 
-    for (let i = 0; i < Math.min(attackerDice.length, defenderDice.length); i++) {
-      if (attackerDice[i] > defenderDice[i]) {
-        defenderLosses++;
-      } else {
-        attackerLosses++;
-      }
+    for (let i = 0; i < Math.min(attackerRolls.length, defenderRolls.length); i++) {
+      if (attackerRolls[i] > defenderRolls[i]) defenderLosses++;
+      else attackerLosses++;
     }
 
-    const updated = territoryStates.map(t => {
-      if (t.id === from.id) {
-        return { ...t, armies: t.armies - attackerLosses };
-      }
-      if (t.id === to.id) {
-        const newArmies = t.armies - defenderLosses;
-        if (newArmies <= 0) {
-          const moveArmies = Math.floor(from.armies / 2);
-          addLog(`${activePlayers[currentPlayer].name} conquered ${to.name}!`);
-          return { ...t, owner: currentPlayer, armies: moveArmies };
+    setTimeout(() => {
+      setDiceAnimation(null);
+      const newTerritories = territoryStates.map(t => {
+        if (t.id === from.id) return { ...t, armies: t.armies - attackerLosses };
+        if (t.id === to.id) {
+          const newArmies = t.armies - defenderLosses;
+          if (newArmies <= 0) {
+            addLog(`⚔️ ${currentPlayer.name} conquered ${to.name}!`);
+            return { ...t, owner: currentPlayerIdx, armies: attackerDiceCount };
+          }
+          return { ...t, armies: newArmies };
         }
-        return { ...t, armies: newArmies };
+        return t;
+      });
+
+      // Move armies after conquest
+      if (newTerritories.find(t => t.id === to.id)?.owner === currentPlayerIdx) {
+        const fromTerr = newTerritories.find(t => t.id === from.id)!;
+        fromTerr.armies -= attackerDiceCount;
+        newTerritories.find(t => t.id === to.id)!.armies += attackerDiceCount - 1;
       }
-      return t;
-    });
 
-    const conqueredId = updated.find(t => t.id === to.id);
-    if (conqueredId.owner === currentPlayer) {
-      const conqueredFrom = updated.find(t => t.id === from.id);
-      const moveArmies = Math.floor(conqueredFrom.armies / 2);
-      updated.find(t => t.id === from.id).armies -= moveArmies;
-    }
-
-    setTerritoryStates(updated);
-    updatePlayerStats(updated);
-    
-    addLog(`Battle: ${from.name} → ${to.name} | Attacker 🎲: [${attackerDice}] Defender 🎲: [${defenderDice}]`);
-    
-    // Check for victory after conquest
-    checkVictory(updated);
+      setTerritoryStates(newTerritories);
+      checkEliminations(newTerritories);
+      checkVictory(newTerritories);
+      addLog(`Battle: ${from.name} → ${to.name} | A:[${attackerRolls.join()}] D:[${defenderRolls.join()}]`);
+    }, 1200);
   };
 
-  const addLog = (message) => {
-    setBattleLog(prev => [message, ...prev].slice(0, 5));
+  const checkEliminations = (territories: TerritoryState[]) => {
+    const ownedCounts = territories.reduce((acc, t) => {
+      if (t.owner !== null) acc[t.owner] = (acc[t.owner] || 0) + 1;
+      return acc;
+    }, [] as number[]);
+
+    setPlayers(prev => prev.map(p => {
+      const idx = activePlayers.findIndex(ap => ap.id === p.id);
+      if (idx !== -1 && ownedCounts[idx] === 0) {
+        addLog(`💀 ${p.name} has been eliminated!`);
+        return { ...p, eliminated: true };
+      }
+      return p;
+    }));
   };
 
-  const checkVictory = (terrStates) => {
-    const activePlayers = players.filter(p => p.active);
-    for (let i = 0; i < activePlayers.length; i++) {
-      const playerTerritories = terrStates.filter(t => t.owner === i).length;
-      if (playerTerritories === territories.length) {
-        setGameState('victory');
-        addLog(`🎉 ${activePlayers[i].name} has conquered the world!`);
-        return true;
-      }
+  const checkVictory = (territories: TerritoryState[]) => {
+    const winnerIdx = ownedCounts.findIndex(count => count === 16);
+    if (winnerIdx !== -1 && activePlayers[winnerIdx]) {
+      setGameState('victory');
+      addLog(`🎉 ${activePlayers[winnerIdx].name} conquered the world!`);
     }
-    return false;
   };
 
   const endTurn = () => {
-    // Check for victory before ending turn
-    if (checkVictory(territoryStates)) {
-      return;
+    const nextIdx = (currentPlayerIdx + 1) % activePlayers.length;
+    setCurrentPlayerIdx(nextIdx);
+    setPhase('deploy');
+    setSelectedFrom(null);
+    setSelectedTo(null);
+    calculateReinforcements(territoryStates, nextIdx);
+    addLog(`${activePlayers[nextIdx].name}'s turn — ${reinforcements} reinforcements`);
+  };
+
+  const handleTerritoryClick = (terr: TerritoryState) => {
+    if (!currentPlayer || terr.owner === null) return;
+
+    if (phase === 'deploy' && terr.owner === currentPlayerIdx && reinforcements > 0) {
+      setTerritoryStates(prev => prev.map(t =>
+        t.id === terr.id ? { ...t, armies: t.armies + 1 } : t
+      ));
+      setReinforcements(r => r - 1);
+      if (reinforcements === 1) addLog(`${currentPlayer.name} finished deploying`);
     }
 
-    const activePlayers = players.filter(p => p.active);
-    const nextPlayer = (currentPlayer + 1) % activePlayers.length;
-    setCurrentPlayer(nextPlayer);
-    
-    const playerTerritories = territoryStates.filter(t => t.owner === nextPlayer).length;
-    const newReinforcements = Math.max(3, Math.floor(playerTerritories / 3));
-    
-    setReinforcements(newReinforcements);
-    setPhase('deploy');
-    setAttackFrom(null);
-    setSelectedTerritory(null);
-    addLog(`${activePlayers[nextPlayer].name}'s turn begins with ${newReinforcements} reinforcements`);
+    else if (phase === 'attack') {
+      if (!selectedFrom && terr.owner === currentPlayerIdx && terr.armies > 1) {
+        setSelectedFrom(terr);
+      } else if (selectedFrom?.id === terr.id) {
+        setSelectedFrom(null);
+      } else if (selectedFrom && terr.owner !== currentPlayerIdx && selectedFrom.neighbors.includes(terr.id)) {
+        performAttack(selectedFrom, terr);
+        setSelectedFrom(null);
+      }
+    }
+
+    else if (phase === 'fortify') {
+      if (!selectedFrom && terr.owner === currentPlayerIdx && terr.armies > 1) {
+        setSelectedFrom(terr);
+      } else if (selectedFrom && terr.owner === currentPlayerIdx && selectedFrom.neighbors.includes(terr.id)) {
+        setSelectedTo(terr);
+        // Fortify happens on End Turn or separate button
+      } else if (selectedFrom?.id === terr.id) {
+        setSelectedFrom(null);
+        setSelectedTo(null);
+      }
+    }
   };
 
-  const skipToAttack = () => {
-    setPhase('attack');
-    addLog(`${players.filter(p => p.active)[currentPlayer].name} skipped deployment`);
-  };
+  const winner = activePlayers.find((_, idx) => playerTerritories[idx] === 16);
 
-  const activePlayers = players.filter(p => p.active);
-  const currentPlayerObj = activePlayers[currentPlayer];
-  const winner = activePlayers.find((p, idx) => territoryStates.filter(t => t.owner === idx).length === territories.length);
-
-  // Victory Screen
   if (gameState === 'victory' && winner) {
     return (
       <div className="w-full h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white flex items-center justify-center">
-        <div className="text-center space-y-8 p-12 bg-slate-800/80 rounded-3xl border-4 border-yellow-400 shadow-2xl">
-          <Crown className="w-32 h-32 text-yellow-400 mx-auto animate-bounce" />
-          <div>
-            <h1 className="text-6xl font-bold mb-4 bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
-              Victory!
-            </h1>
-            <div className="flex items-center justify-center gap-4 mb-6">
-              <div 
-                className="w-16 h-16 rounded-full border-4 border-white shadow-lg"
-                style={{ backgroundColor: winner.color }}
-              />
-              <p className="text-4xl font-bold">{winner.name}</p>
-            </div>
-            <p className="text-2xl text-gray-300 mb-8">
-              has conquered all territories!
-            </p>
+        <div className="text-center space-y-8 p-12 bg-slate-800/90 backdrop-blur rounded-3xl border-4 border-yellow-500 shadow-2xl">
+          <Trophy className="w-32 h-32 text-yellow-400 mx-auto animate-pulse" />
+          <h1 className="text-7xl font-bold bg-gradient-to-r from-yellow-400 via-orange-400 to-red-500 bg-clip-text text-transparent">
+            TOTAL VICTORY
+          </h1>
+          <div className="flex items-center justify-center gap-6 text-4xl">
+            <div className="w-20 h-20 rounded-full border-8 border-white shadow-2xl" style={{ backgroundColor: winner.color }} />
+            <div className="font-bold">{winner.name}</div>
           </div>
-          
-          <div className="flex gap-4 justify-center">
-            <button
-              onClick={() => window.location.reload()}
-              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-all transform hover:scale-105"
-            >
+          <p className="text-2xl text-gray-300">has conquered all territories!</p>
+          <div className="flex gap-6 justify-center mt-10">
+            <button onClick={() => window.location.reload()} className="bg-emerald-600 hover:bg-emerald-500 px-10 py-5 rounded-xl font-bold text-xl transition transform hover:scale-110">
               Play Again
             </button>
-            <a
-              href="https://github.com/MAGICMANIAC/conquest-wars"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="bg-gradient-to-r from-slate-700 to-slate-600 hover:from-slate-600 hover:to-slate-500 text-white font-bold py-4 px-8 rounded-lg shadow-lg transition-all transform hover:scale-105 flex items-center gap-2"
-            >
-              <Github className="w-5 h-5" />
-              View on GitHub
+            <a href="https://github.com" className="bg-slate-700 hover:bg-slate-600 px-8 py-5 rounded-xl font-bold text-xl flex items-center gap-3 transition">
+              <Github /> GitHub
             </a>
           </div>
         </div>
@@ -241,281 +261,217 @@ const ConquestWars = () => {
   }
 
   return (
-    <div className="w-full h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-4">
-      <div className="max-w-7xl mx-auto h-full flex flex-col">
-        
-        {/* Header */}
-        <div className="mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-3">
-              <Crown className="w-8 h-8 text-yellow-400" />
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
-                Conquest Wars
-              </h1>
-              <Map className="w-6 h-6 text-purple-400" />
-            </div>
-            <div className="flex gap-3">
-              <a 
-                href="https://github.com/MAGICMANIAC/conquest-wars" 
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 bg-slate-800/50 hover:bg-slate-700 px-4 py-2 rounded-lg transition-colors border border-slate-600"
-              >
-                <Github className="w-5 h-5" />
-                <span className="text-sm">GitHub</span>
-                <ExternalLink className="w-4 h-4" />
-              </a>
-              <div className="text-sm bg-purple-800/50 px-4 py-2 rounded-lg border border-purple-600">
-                Built on Starknet with Dojo
-              </div>
-            </div>
-          </div>
-
-          {/* Current Player Info */}
-          <div className="bg-gradient-to-r from-purple-800/80 to-blue-800/80 p-4 rounded-xl border-2 border-purple-500 shadow-lg">
-            <div className="flex items-center justify-between">
+    <>
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 text-white p-4">
+        <div className="max-w-screen-2xl mx-auto">
+          <header className="mb-6">
+            <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-4">
-                <div 
-                  className="w-12 h-12 rounded-full border-4 border-white shadow-lg"
-                  style={{ backgroundColor: currentPlayerObj.color }}
-                />
-                <div>
-                  <div className="text-2xl font-bold">{currentPlayerObj.name}</div>
-                  <div className="text-sm opacity-80 flex items-center gap-2">
-                    <Map className="w-4 h-4" />
-                    {territoryStates.filter(t => t.owner === currentPlayer).length} territories
-                  </div>
-                </div>
+                <Crown className="w-10 h-10 text-yellow-400" />
+                <h1 className="text-5xl font-bold bg-gradient-to-r from-yellow-400 to-orange-500 bg-clip-text text-transparent">
+                  Conquest Wars
+                </h1>
               </div>
-              
-              <div className="flex gap-4">
-                {phase === 'deploy' && (
-                  <div className="bg-green-600/30 border-2 border-green-400 px-6 py-3 rounded-lg">
-                    <div className="text-xs uppercase tracking-wider">Deploy Phase</div>
-                    <div className="text-2xl font-bold flex items-center gap-2">
-                      <Shield className="w-6 h-6" />
-                      {reinforcements} armies
-                    </div>
-                  </div>
-                )}
-                
-                {phase === 'attack' && (
-                  <div className="bg-red-600/30 border-2 border-red-400 px-6 py-3 rounded-lg">
-                    <div className="text-xs uppercase tracking-wider">Attack Phase</div>
-                    <div className="text-xl font-bold flex items-center gap-2">
-                      <Swords className="w-5 h-5" />
-                      Choose targets
-                    </div>
-                  </div>
-                )}
+              <div className="text-sm bg-purple-800/50 px-4 py-2 rounded-lg border border-purple-600">
+                Classic Risk-style • Built with React + Tailwind
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="flex-1 flex gap-4 overflow-hidden">
-          
-          {/* Game Map */}
-          <div className="flex-1 bg-slate-800/50 rounded-xl p-6 border border-purple-500/30 relative overflow-auto">
-            <svg width="700" height="550" className="mx-auto">
-              {/* Draw connections */}
-              {territoryStates.map(terr => 
-                terr.neighbors.map(neighborId => {
-                  const neighbor = territoryStates.find(t => t.id === neighborId);
-                  return (
-                    <line
-                      key={`${terr.id}-${neighborId}`}
-                      x1={terr.x}
-                      y1={terr.y}
-                      x2={neighbor.x}
-                      y2={neighbor.y}
-                      stroke="#475569"
-                      strokeWidth="2"
-                      opacity="0.3"
-                    />
-                  );
-                })
-              )}
+            {/* Current Turn */}
+            {currentPlayer && (
+              <div className="bg-gradient-to-r from-purple-900/80 to-indigo-900/80 p-6 rounded-2xl border-2 border-purple-500 shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-6">
+                    <div className="w-16 h-16 rounded-full border-4 border-white shadow-xl" style={{ backgroundColor: currentPlayer.color }} />
+                    <div>
+                      <h2 className="text-3xl font-bold">{currentPlayer.name}'s Turn</h2>
+                      <p className="text-lg opacity-90">{playerTerritories[currentPlayerIdx]} territories</p>
+                    </div>
+                  </div>
 
-              {/* Draw territories */}
-              {territoryStates.map(terr => {
-                const owner = activePlayers[terr.owner];
-                const isSelected = selectedTerritory?.id === terr.id;
-                const canAttack = attackFrom && terr.neighbors.includes(attackFrom.id) && terr.owner !== currentPlayer;
-                
-                return (
-                  <g key={terr.id}>
-                    {/* Glow effect for attackable territories */}
-                    {canAttack && (
-                      <circle
-                        cx={terr.x}
-                        cy={terr.y}
-                        r="42"
-                        fill="none"
-                        stroke="#ef4444"
-                        strokeWidth="3"
-                        opacity="0.6"
-                        className="animate-pulse"
-                      />
+                  <div className="flex gap-6 items-center">
+                    {phase === 'deploy' && (
+                      <div className="bg-emerald-600/30 border-2 border-emerald-400 px-8 py-4 rounded-xl text-center">
+                        <div className="text-sm font-bold uppercase">Deploy</div>
+                        <div className="text-3xl font-bold">{reinforcements} <Shield className="inline w-8 h-8" /></div>
+                      </div>
                     )}
-                    
-                    {/* Territory circle */}
-                    <circle
-                      cx={terr.x}
-                      cy={terr.y}
-                      r="35"
-                      fill={owner ? owner.color : '#374151'}
-                      stroke={isSelected ? '#fbbf24' : '#1e293b'}
-                      strokeWidth={isSelected ? '4' : '2'}
-                      className="cursor-pointer transition-all hover:stroke-white hover:stroke-4"
-                      onClick={() => handleTerritoryClick(terr)}
-                      opacity={terr.owner === currentPlayer ? '1' : '0.7'}
-                    />
-                    
-                    {/* Army count */}
-                    <text
-                      x={terr.x}
-                      y={terr.y}
-                      textAnchor="middle"
-                      dy=".3em"
-                      className="text-2xl font-bold pointer-events-none"
-                      fill="white"
-                      stroke="#000"
-                      strokeWidth="3"
-                      paintOrder="stroke"
-                    >
-                      {terr.armies}
-                    </text>
-                    
-                    {/* Territory name */}
-                    <text
-                      x={terr.x}
-                      y={terr.y + 50}
-                      textAnchor="middle"
-                      className="text-xs font-semibold pointer-events-none"
-                      fill="white"
-                      stroke="#000"
-                      strokeWidth="2"
-                      paintOrder="stroke"
-                    >
-                      {terr.name}
-                    </text>
-                  </g>
-                );
-              })}
-            </svg>
-
-            {/* Phase Instructions */}
-            <div className="absolute bottom-4 left-4 right-4 bg-black/80 p-4 rounded-lg border border-purple-500/30">
-              {phase === 'deploy' && (
-                <div>
-                  <div className="font-bold mb-1 flex items-center gap-2">
-                    <Shield className="w-4 h-4" />
-                    Deploy Phase
-                  </div>
-                  <div className="text-sm opacity-80">
-                    Click your territories to place {reinforcements} reinforcements. 
-                    {reinforcements > 0 && <button onClick={skipToAttack} className="ml-2 underline hover:text-yellow-400">Skip to Attack</button>}
+                    {phase === 'attack' && (
+                      <div className="bg-red-600/30 border-2 border-red-400 px-8 py-4 rounded-xl">
+                        <Swords className="w-12 h-12 mx-auto" />
+                        <div className="text-sm font-bold uppercase">Attack Phase</div>
+                      </div>
+                    )}
+                    {phase === 'fortify' && (
+                      <div className="bg-blue-600/30 border-2 border-blue-400 px-8 py-4 rounded-xl">
+                        <ArrowRight className="w-12 h-12 mx-auto" />
+                        <div className="text-sm font-bold uppercase">Fortify</div>
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
-              
-              {phase === 'attack' && !attackFrom && (
-                <div>
-                  <div className="font-bold mb-1 flex items-center gap-2">
-                    <Swords className="w-4 h-4" />
-                    Attack Phase
-                  </div>
-                  <div className="text-sm opacity-80">
-                    Select one of your territories with 2+ armies to attack from.
-                  </div>
-                </div>
-              )}
-              
-              {phase === 'attack' && attackFrom && (
-                <div>
-                  <div className="font-bold mb-1 flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-yellow-400" />
-                    Attacking from {attackFrom.name}
-                  </div>
-                  <div className="text-sm opacity-80">
-                    Click an adjacent enemy territory to attack, or click {attackFrom.name} again to cancel.
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Side Panel */}
-          <div className="w-80 flex flex-col gap-4">
-            
-            {/* Players */}
-            <div className="bg-slate-800/50 rounded-xl p-4 border border-purple-500/30">
-              <div className="font-bold mb-3 flex items-center gap-2">
-                <Users className="w-5 h-5" />
-                Players
               </div>
-              <div className="space-y-2">
-                {activePlayers.map((player, idx) => (
-                  <div 
-                    key={player.id}
-                    className={`p-3 rounded-lg border-2 ${
-                      idx === currentPlayer 
-                        ? 'border-yellow-400 bg-yellow-400/10' 
-                        : 'border-slate-600 bg-slate-700/30'
-                    }`}
-                  >
+            )}
+          </header>
+
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+            {/* Map */}
+            <div className="lg:col-span-3 bg-slate-800/60 rounded-2xl p-6 border border-purple-500/30 relative overflow-hidden">
+              <svg viewBox="0 0 700 550" className="w-full h-auto">
+                {/* Connections */}
+                {territoryStates.flatMap(terr =>
+                  terr.neighbors.map(nid => {
+                    const n = territoryStates.find(t => t.id === nid);
+                    if (!n || terr.id >= nid) return null;
+                    return (
+                      <line
+                        key={`${terr.id}-${nid}`}
+                        x1={terr.x} y1={terr.y}
+                        x2={n.x} y2={n.y}
+                        stroke="#475569"
+                        strokeWidth="3"
+                        opacity="0.4"
+                      />
+                    );
+                  })
+                )}
+
+                {/* Attack Arrow */}
+                {phase === 'attack' && selectedFrom && selectedTo && (
+                  <path
+                    d={`M ${selectedFrom.x} ${selectedFrom.y} L ${selectedTo.x} ${selectedTo.y}`}
+                    stroke="#ef4444"
+                    strokeWidth="6"
+                    fill="none"
+                    markerEnd="url(#arrowhead)"
+                    opacity="0.8"
+                    className="animate-pulse"
+                  />
+                )}
+
+                <defs>
+                  <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                    <path d="M0,0 L0,6 L9,3 z" fill="#ef4444" />
+                  </marker>
+                </defs>
+
+                {/* Territories */}
+                {territoryStates.map(terr => {
+                  const owner = terr.owner !== null ? activePlayers[terr.owner] : null;
+                  const isSelected = selectedFrom?.id === terr.id;
+                  const isTarget = phase === 'attack' && selectedFrom && selectedFrom.neighbors.includes(terr.id) && terr.owner !== currentPlayerIdx;
+                  const isFortifyTarget = phase === 'fortify' && selectedFrom && selectedFrom.neighbors.includes(terr.id) && terr.owner === currentPlayerIdx;
+
+                  return (
+                    <g key={terr.id} className="cursor-pointer" onClick={() => handleTerritoryClick(terr)}>
+                      {/* Glow */}
+                      {(isTarget || isFortifyTarget) && (
+                        <circle cx={terr.x} cy={terr.y} r="45" fill="none" stroke={isTarget ? '#ef4444' : '#22d3ee'} strokeWidth="4" opacity="0.7">
+                          <animate attributeName="r" values="40;50;40" dur="1.5s" repeatCount="indefinite" />
+                          <animate attributeName="opacity" values="0.7;0.3;0.7" dur="1.5s" repeatCount="indefinite" />
+                        </circle>
+                      )}
+
+                      <circle
+                        cx={terr.x} cy={terr.y} r="38"
+                        fill={owner ? owner.color : '#1e293b'}
+                        stroke={isSelected ? '#fbbf24' : owner ? '#000' : '#475569'}
+                        strokeWidth={isSelected ? 6 : 3}
+                        className="transition-all hover:r-42"
+                      />
+
+                      <text x={terr.x} y={terr.y + 8} textAnchor="middle" className="text-2xl font-bold fill-white" stroke="#000" strokeWidth="4" paintOrder="stroke">
+                        {terr.armies}
+                      </text>
+
+                      <text x={terr.x} y={terr.y + 58} textAnchor="middle" className="text-xs font-bold fill-gray-300">
+                        {terr.name}
+                      </text>
+                    </g>
+                  );
+                })}
+
+                {/* Dice Animation */}
+                {diceAnimation && (
+                  <g transform="translate(300, 250)">
+                    <text x="0" y="-40" textAnchor="middle" className="text-3xl font-bold fill-red-400">⚔️ BATTLE ⚔️</text>
+                    <text x="-80" y="0" className="text-4xl">{diceAnimation.attacker.map((d, i) => <tspan key={i} x="-80" dy={i === 0 ? 0 : 50}>{'🎲 '.repeat(d)}</tspan>)}</text>
+                    <text x="80" y="0" className="text-4xl">{diceAnimation.defender.map((d, i) => <tspan key={i} x="80" dy={i === 0 ? 0 : 50}>{'🎲 '.repeat(d)}</tspan>)}</text>
+                  </g>
+                )}
+              </svg>
+
+              {/* Instructions */}
+              <div className="absolute bottom-4 left-4 right-4 bg-black/80 backdrop-blur p-4 rounded-xl border border-purple-500/50">
+                {phase === 'deploy' && (
+                  <p className="text-lg font-semibold">🛡️ Click your territories to deploy {reinforcements} armies {reinforcements > 0 && <button onClick={() => setPhase('attack')} className="ml-3 underline text-yellow-400 hover:text-yellow-300">Skip →</button>}</p>
+                )}
+                {phase === 'attack' && !selectedFrom && <p className="text-lg font-semibold">⚔️ Select a territory with 2+ armies to attack from</p>}
+                {phase === 'attack' && selectedFrom && <p className="text-lg font-semibold text-red-400">→ Click an adjacent enemy territory to attack (or reclick to cancel)</p>}
+                {phase === 'fortify' && <p className="text-lg font-semibold text-cyan-400">Move armies: select source → destination (one move per turn)</p>}
+              </div>
+            </div>
+
+            {/* Sidebar */}
+            <div className="space-y-4">
+              {/* Players */}
+              <div className="bg-slate-800/60 rounded-2xl p-5 border border-purple-500/30">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><Users /> Players</h3>
+                {activePlayers.map((p, idx) => (
+                  <div key={p.id} className={`p-4 rounded-lg mb-3 border-2 ${idx === currentPlayerIdx ? 'border-yellow-400 bg-yellow-400/10' : 'border-slate-600'}`}>
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div 
-                          className="w-6 h-6 rounded-full border-2 border-white"
-                          style={{ backgroundColor: player.color }}
-                        />
-                        <div className="font-semibold text-sm">{player.name}</div>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full border-2 border-white" style={{ backgroundColor: p.color }} />
+                        <span className="font-semibold">{p.name}</span>
+                        {playerTerritories[idx] === 0 && <Skull className="w-5 h-5 text-red-500" />}
                       </div>
                       <div className="text-right">
-                        <div className="text-xs opacity-60">Territories</div>
-                        <div className="font-bold">{player.territories}</div>
+                        <div className="text-2xl font-bold">{playerTerritories[idx] || 0}</div>
+                        <div className="text-xs opacity-70">territories</div>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-            </div>
 
-            {/* Battle Log */}
-            <div className="bg-slate-800/50 rounded-xl p-4 border border-purple-500/30 flex-1 overflow-hidden">
-              <div className="font-bold mb-3 flex items-center gap-2">
-                <Trophy className="w-5 h-5" />
-                Battle Log
+              {/* Battle Log */}
+              <div className="bg-slate-800/60 rounded-2xl p-5 border border-purple-500/30 flex-1">
+                <h3 className="text-xl font-bold mb-3 flex items-center gap-2"><Zap /> Battle Log</h3>
+                <div className="space-y-2 text-sm max-h-64 overflow-y-auto">
+                  {battleLog.length === 0 && <p className="text-gray-500 italic">No battles yet...</p>}
+                  {battleLog.map((log, i) => (
+                    <div key={i} className="p-2 bg-slate-700/50 rounded border border-slate-600">{log}</div>
+                  ))}
+                </div>
               </div>
-              <div className="space-y-2 text-xs overflow-y-auto h-32">
-                {battleLog.map((log, idx) => (
-                  <div key={idx} className="p-2 bg-slate-700/50 rounded border border-slate-600">
-                    {log}
-                  </div>
-                ))}
-              </div>
-            </div>
 
-            {/* Actions */}
-            <div className="bg-slate-800/50 rounded-xl p-4 border border-purple-500/30">
-              <button
-                onClick={endTurn}
-                className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition-all transform hover:scale-105"
-              >
-                End Turn
-              </button>
-              
-              <div className="mt-3 text-xs text-center opacity-60">
-                {phase === 'deploy' ? 'Place all armies to attack' : 'Attack enemies or end turn'}
+              {/* Actions */}
+              <div className="space-y-3">
+                {phase === 'deploy' && reinforcements === 0 && (
+                  <button onClick={() => setPhase('attack')} className="w-full bg-red-600 hover:bg-red-500 py-4 rounded-xl font-bold text-xl transition transform hover:scale-105">
+                    <Swords className="inline mr-2" /> Begin Attacks
+                  </button>
+                )}
+                {phase === 'attack' && (
+                  <button onClick={() => setPhase('fortify')} className="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-xl font-bold text-xl transition transform hover:scale-105">
+                    <ArrowRight className="inline mr-2" /> Fortify Phase
+                  </button>
+                )}
+                {phase === 'fortify' && (
+                  <button onClick={endTurn} className="w-full bg-emerald-600 hover:bg-emerald-500 py-4 rounded-xl font-bold text-xl transition transform hover:scale-105">
+                    End Turn →
+                  </button>
+                )}
+                {phase !== 'fortify' && (
+                  <button onClick={endTurn} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 py-4 rounded-xl font-bold text-xl transition transform hover:scale-105">
+                    End Turn Early
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
-};
-
-export default ConquestWars;
+}
